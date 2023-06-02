@@ -25,6 +25,6 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	printer := expr.NewPrinter()
-	fmt.Println(printer.Print(exp))
+	interpreter := expr.NewInterpreter()
+	fmt.Println(interpreter.Interpret(exp))
 }
