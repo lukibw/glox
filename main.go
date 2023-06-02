@@ -5,8 +5,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/lukibw/glox/ast"
-	"github.com/lukibw/glox/scan"
+	"github.com/lukibw/glox/expr"
+	"github.com/lukibw/glox/parser"
+	"github.com/lukibw/glox/scanner"
 )
 
 func main() {
@@ -14,22 +15,16 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	lexer := scan.NewLexer(string(source))
-	tokens, err := lexer.ScanTokens()
+	scanner := scanner.New(string(source))
+	tokens, err := scanner.ScanTokens()
 	if err != nil {
 		log.Fatalln(err)
 	}
-	for _, token := range tokens {
-		fmt.Println(token)
+	parser := parser.New(tokens)
+	exp, err := parser.Parse()
+	if err != nil {
+		log.Fatalln(err)
 	}
-	binaryExpr := &ast.BinaryExpr{
-		Left: &ast.UnaryExpr{
-			Operator: scan.Token{scan.Minus, "-", nil, 1},
-			Right:    &ast.LiteralExpr{123},
-		},
-		Operator: scan.Token{scan.Star, "*", nil, 1},
-		Right:    &ast.GroupingExpr{&ast.LiteralExpr{45.67}},
-	}
-	printer := ast.Printer{}
-	fmt.Println(printer.Print(binaryExpr))
+	printer := expr.NewPrinter()
+	fmt.Println(printer.Print(exp))
 }

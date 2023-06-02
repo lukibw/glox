@@ -1,10 +1,9 @@
-package scan
+package token
 
-type TokenKind int
+type Kind int
 
 const (
-	// Single-character tokens.
-	LeftParen TokenKind = iota
+	LeftParen Kind = iota
 	RightParen
 	LeftBrace
 	RightBrace
@@ -15,8 +14,6 @@ const (
 	Semicolon
 	Slash
 	Star
-
-	// One or two character tokens.
 	Bang
 	BangEqual
 	Equal
@@ -25,13 +22,9 @@ const (
 	GreaterEqual
 	Less
 	LessEqual
-
-	// Literals.
 	Identifier
 	String
 	Number
-
-	// Keywords.
 	And
 	Class
 	Else
@@ -48,12 +41,11 @@ const (
 	True
 	Var
 	While
-
 	Eof
 )
 
 type Token struct {
-	Kind    TokenKind
+	Kind    Kind
 	Lexeme  string
 	Literal interface{}
 	Line    int
