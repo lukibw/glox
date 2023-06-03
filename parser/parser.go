@@ -1,50 +1,50 @@
 package parser
 
 import (
-	"github.com/lukibw/glox/expr"
+	"github.com/lukibw/glox/ast"
 	"github.com/lukibw/glox/token"
 )
 
-type Parser struct {
+type Parser[T any] struct {
 	tokens  []token.Token
 	current int
 }
 
-func New(tokens []token.Token) *Parser {
-	return &Parser{tokens, 0}
+func New[T any](tokens []token.Token) *Parser[T] {
+	return &Parser[T]{tokens, 0}
 }
 
-func (p *Parser) newError(kind ErrorKind) error {
+func (p *Parser[T]) newError(kind ErrorKind) error {
 	return &Error{p.peek(), kind}
 }
 
-func (p *Parser) peek() token.Token {
+func (p *Parser[T]) peek() token.Token {
 	return p.tokens[p.current]
 }
 
-func (p *Parser) previous() token.Token {
+func (p *Parser[T]) previous() token.Token {
 	return p.tokens[p.current-1]
 }
 
-func (p *Parser) isAtEnd() bool {
+func (p *Parser[T]) isAtEnd() bool {
 	return p.peek().Kind == token.Eof
 }
 
-func (p *Parser) advance() token.Token {
+func (p *Parser[T]) advance() token.Token {
 	if !p.isAtEnd() {
 		p.current++
 	}
 	return p.previous()
 }
 
-func (p *Parser) check(kind token.Kind) bool {
+func (p *Parser[T]) check(kind token.Kind) bool {
 	if p.isAtEnd() {
 		return false
 	}
 	return p.peek().Kind == kind
 }
 
-func (p *Parser) match(kinds ...token.Kind) bool {
+func (p *Parser[T]) match(kinds ...token.Kind) bool {
 	for _, kind := range kinds {
 		if p.check(kind) {
 			p.advance()
@@ -54,16 +54,16 @@ func (p *Parser) match(kinds ...token.Kind) bool {
 	return false
 }
 
-func (p *Parser) Parse() (expr.Expr, error) {
+func (p *Parser[T]) Parse() (ast.Expr[T], error) {
 	return p.expression()
 }
 
-func (p *Parser) expression() (expr.Expr, error) {
+func (p *Parser[T]) expression() (ast.Expr[T], error) {
 	return p.equality()
 }
 
-func (p *Parser) equality() (expr.Expr, error) {
-	exp, err := p.comparison()
+func (p *Parser[T]) equality() (ast.Expr[T], error) {
+	expr, err := p.comparison()
 	if err != nil {
 		return nil, err
 	}
@@ -73,17 +73,17 @@ func (p *Parser) equality() (expr.Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		exp = &expr.Binary{
-			Left:     exp,
+		expr = &ast.BinaryExpr[T]{
+			Left:     expr,
 			Operator: operator,
 			Right:    right,
 		}
 	}
-	return exp, nil
+	return expr, nil
 }
 
-func (p *Parser) comparison() (expr.Expr, error) {
-	exp, err := p.term()
+func (p *Parser[T]) comparison() (ast.Expr[T], error) {
+	expr, err := p.term()
 	if err != nil {
 		return nil, err
 	}
@@ -93,17 +93,17 @@ func (p *Parser) comparison() (expr.Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		exp = &expr.Binary{
-			Left:     exp,
+		expr = &ast.BinaryExpr[T]{
+			Left:     expr,
 			Operator: operator,
 			Right:    right,
 		}
 	}
-	return exp, nil
+	return expr, nil
 }
 
-func (p *Parser) term() (expr.Expr, error) {
-	exp, err := p.factor()
+func (p *Parser[T]) term() (ast.Expr[T], error) {
+	expr, err := p.factor()
 	if err != nil {
 		return nil, err
 	}
@@ -113,17 +113,17 @@ func (p *Parser) term() (expr.Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		exp = &expr.Binary{
-			Left:     exp,
+		expr = &ast.BinaryExpr[T]{
+			Left:     expr,
 			Operator: operator,
 			Right:    right,
 		}
 	}
-	return exp, nil
+	return expr, nil
 }
 
-func (p *Parser) factor() (expr.Expr, error) {
-	exp, err := p.unary()
+func (p *Parser[T]) factor() (ast.Expr[T], error) {
+	expr, err := p.unary()
 	if err != nil {
 		return nil, err
 	}
@@ -133,23 +133,23 @@ func (p *Parser) factor() (expr.Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		exp = &expr.Binary{
-			Left:     exp,
+		expr = &ast.BinaryExpr[T]{
+			Left:     expr,
 			Operator: operator,
 			Right:    right,
 		}
 	}
-	return exp, nil
+	return expr, nil
 }
 
-func (p *Parser) unary() (expr.Expr, error) {
+func (p *Parser[T]) unary() (ast.Expr[T], error) {
 	if p.match(token.Bang, token.Minus) {
 		operator := p.previous()
 		right, err := p.unary()
 		if err != nil {
 			return nil, err
 		}
-		return &expr.Unary{
+		return &ast.UnaryExpr[T]{
 			Operator: operator,
 			Right:    right,
 		}, nil
@@ -157,18 +157,18 @@ func (p *Parser) unary() (expr.Expr, error) {
 	return p.primary()
 }
 
-func (p *Parser) primary() (expr.Expr, error) {
+func (p *Parser[T]) primary() (ast.Expr[T], error) {
 	switch {
 	case p.match(token.False):
-		return &expr.Literal{Value: false}, nil
+		return &ast.LiteralExpr[T]{Value: false}, nil
 	case p.match(token.True):
-		return &expr.Literal{Value: true}, nil
+		return &ast.LiteralExpr[T]{Value: true}, nil
 	case p.match(token.Nil):
-		return &expr.Literal{Value: nil}, nil
+		return &ast.LiteralExpr[T]{Value: nil}, nil
 	case p.match(token.Number, token.String):
-		return &expr.Literal{Value: p.previous().Literal}, nil
+		return &ast.LiteralExpr[T]{Value: p.previous().Literal}, nil
 	case p.match(token.LeftParen):
-		exp, err := p.expression()
+		expr, err := p.expression()
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +177,7 @@ func (p *Parser) primary() (expr.Expr, error) {
 		} else {
 			return nil, p.newError(ErrMissingRightParen)
 		}
-		return &expr.Grouping{Expression: exp}, nil
+		return &ast.GroupingExpr[T]{Expression: expr}, nil
 	}
 	return nil, p.newError(ErrMissingExpr)
 }
@@ -193,7 +193,7 @@ func (p *Parser) primary() (expr.Expr, error) {
 // 	token.Return,
 // }
 
-// func (p *Parser) synchronize() {
+// func (p *Parser[T]) synchronize() {
 // 	p.advance()
 // 	for !p.isAtEnd() {
 // 		if p.previous().Kind == token.Semicolon {
