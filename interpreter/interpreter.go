@@ -8,11 +8,14 @@ import (
 )
 
 type Interpreter struct {
-	env *env
+	globals *env
+	env     *env
 }
 
 func New() *Interpreter {
-	return &Interpreter{newEnv(nil)}
+	globals := newEnv(nil)
+	globals.define("clock", Clock{})
+	return &Interpreter{globals, globals}
 }
 
 func (i *Interpreter) stringify(value any) string {
@@ -203,6 +206,36 @@ func (i *Interpreter) VisitLogicalExpr(expr *ast.LogicalExpr) (any, error) {
 	return i.evaluate(expr.Right)
 }
 
+func (i *Interpreter) VisitCallExpr(expr *ast.CallExpr) (any, error) {
+	callee, err := i.evaluate(expr.Callee)
+	if err != nil {
+		return nil, err
+	}
+	arguments := make([]any, len(expr.Arguments))
+	for k := 0; k < len(expr.Arguments); k++ {
+		arg, err := i.evaluate(expr.Arguments[k])
+		if err != nil {
+			return nil, err
+		}
+		arguments[k] = arg
+	}
+	function, ok := callee.(Callable)
+	if !ok {
+		return nil, &Error{expr.Paren, ErrFunctionOrClassCallable}
+	}
+	if function.Arity() > len(arguments) {
+		return nil, &Error{expr.Paren, ErrFunctionTooFewArgs}
+	}
+	if function.Arity() < len(arguments) {
+		return nil, &Error{expr.Paren, ErrFunctionTooManyArgs}
+	}
+	value, err := function.Call(i, arguments)
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
 func (i *Interpreter) VisitExpressionStmt(stmt *ast.ExpressionStmt) error {
 	_, err := i.evaluate(stmt.Expression)
 	return err
@@ -265,4 +298,30 @@ func (i *Interpreter) VisitWhileStmt(stmt *ast.WhileStmt) error {
 		}
 	}
 	return nil
+}
+
+func (i *Interpreter) VisitFunctionStmt(stmt *ast.FunctionStmt) error {
+	function := &Function{Declaration: stmt, Closure: i.env}
+	i.env.define(stmt.Name.Lexeme, function)
+	return nil
+}
+
+type returnError struct {
+	value any
+}
+
+func (e *returnError) Error() string {
+	return fmt.Sprint(e.value)
+}
+
+func (i *Interpreter) VisitReturnStmt(stmt *ast.ReturnStmt) error {
+	var value any
+	var err error
+	if stmt.Value != nil {
+		value, err = i.evaluate(stmt.Value)
+		if err != nil {
+			return err
+		}
+	}
+	return &returnError{value}
 }

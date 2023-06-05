@@ -13,13 +13,19 @@ const (
 	ErrNumberOperands
 	ErrNumberOrStringOperands
 	ErrUndefinedVariable
+	ErrFunctionOrClassCallable
+	ErrFunctionTooFewArgs
+	ErrFunctionTooManyArgs
 )
 
 var runtimeErrorMessages = map[ErrorKind]string{
-	ErrNumberOperand:          "operand must be a number",
-	ErrNumberOperands:         "operands must be numbers",
-	ErrNumberOrStringOperands: "operands must be two numbers or two strings",
-	ErrUndefinedVariable:      "undefined variable",
+	ErrNumberOperand:           "operand must be a number",
+	ErrNumberOperands:          "operands must be numbers",
+	ErrNumberOrStringOperands:  "operands must be two numbers or two strings",
+	ErrUndefinedVariable:       "undefined variable",
+	ErrFunctionOrClassCallable: "callable must be a function or a class",
+	ErrFunctionTooFewArgs:      "too few arguments passed to the function",
+	ErrFunctionTooManyArgs:     "too many arguments passed to the function",
 }
 
 func (k ErrorKind) String() string {

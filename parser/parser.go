@@ -130,12 +130,16 @@ func (p *Parser) varDeclaration() (ast.Stmt, error) {
 
 func (p *Parser) statement() (ast.Stmt, error) {
 	switch {
+	case p.match(ast.Fun):
+		return p.function()
 	case p.match(ast.For):
 		return p.forStatement()
 	case p.match(ast.If):
 		return p.ifStatement()
 	case p.match(ast.Print):
 		return p.printStatement()
+	case p.match(ast.Return):
+		return p.returnStatement()
 	case p.match(ast.While):
 		return p.whileStatement()
 	case p.match(ast.LeftBrace):
@@ -147,6 +151,44 @@ func (p *Parser) statement() (ast.Stmt, error) {
 	default:
 		return p.expressionStatement()
 	}
+}
+
+func (p *Parser) function() (ast.Stmt, error) {
+	name, err := p.consume(ast.Identifier, ErrFunctionName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(ast.LeftParen, ErrFunctionLeftParen); err != nil {
+		return nil, err
+	}
+	params := make([]ast.Token, 0)
+	if !p.check(ast.RightParen) {
+		for {
+			param, err := p.consume(ast.Identifier, ErrParameterName)
+			if err != nil {
+				return nil, err
+			}
+			params = append(params, param)
+			if !p.match(ast.Comma) {
+				break
+			}
+		}
+	}
+	if _, err = p.consume(ast.RightParen, ErrFunctionRightParen); err != nil {
+		return nil, err
+	}
+	if _, err = p.consume(ast.LeftBrace, ErrFunctionLeftBrace); err != nil {
+		return nil, err
+	}
+	body, err := p.block()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.FunctionStmt{
+		Name:   name,
+		Params: params,
+		Body:   body,
+	}, nil
 }
 
 func (p *Parser) forStatement() (ast.Stmt, error) {
@@ -248,6 +290,22 @@ func (p *Parser) printStatement() (ast.Stmt, error) {
 		return nil, err
 	}
 	return &ast.PrintStmt{Expression: expr}, nil
+}
+
+func (p *Parser) returnStatement() (ast.Stmt, error) {
+	keyword := p.previous()
+	var value ast.Expr
+	var err error
+	if !p.check(ast.Semicolon) {
+		value, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if _, err = p.consume(ast.Semicolon, ErrReturnSemicolon); err != nil {
+		return nil, err
+	}
+	return &ast.ReturnStmt{Keyword: keyword, Value: value}, nil
 }
 
 func (p *Parser) whileStatement() (ast.Stmt, error) {
@@ -449,7 +507,50 @@ func (p *Parser) unary() (ast.Expr, error) {
 			Right:    right,
 		}, nil
 	}
-	return p.primary()
+	return p.call()
+}
+
+func (p *Parser) call() (ast.Expr, error) {
+	expr, err := p.primary()
+	if err != nil {
+		return nil, err
+	}
+	for {
+		if p.match(ast.LeftParen) {
+			expr, err = p.finishCall(expr)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			break
+		}
+	}
+	return expr, nil
+}
+
+func (p *Parser) finishCall(callee ast.Expr) (ast.Expr, error) {
+	arguments := make([]ast.Expr, 0)
+	if !p.check(ast.RightParen) {
+		for {
+			expr, err := p.expression()
+			if err != nil {
+				return nil, err
+			}
+			arguments = append(arguments, expr)
+			if !p.match(ast.Comma) {
+				break
+			}
+		}
+	}
+	paren, err := p.consume(ast.RightParen, ErrArgumentsRightParen)
+	if err != nil {
+		return nil, err
+	}
+	return &ast.CallExpr{
+		Callee:    callee,
+		Paren:     paren,
+		Arguments: arguments,
+	}, nil
 }
 
 func (p *Parser) primary() (ast.Expr, error) {

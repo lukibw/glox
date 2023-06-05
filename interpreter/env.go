@@ -1,6 +1,8 @@
 package interpreter
 
-import "github.com/lukibw/glox/ast"
+import (
+	"github.com/lukibw/glox/ast"
+)
 
 type env struct {
 	values    map[string]any

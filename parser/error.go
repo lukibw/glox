@@ -24,6 +24,13 @@ const (
 	ErrMissingForLeftParen
 	ErrMissingForRightParen
 	ErrMissingConditionSemicolon
+	ErrArgumentsRightParen
+	ErrFunctionName
+	ErrFunctionLeftParen
+	ErrFunctionRightParen
+	ErrParameterName
+	ErrFunctionLeftBrace
+	ErrReturnSemicolon
 )
 
 var errorMessages = map[ErrorKind]string{
@@ -42,6 +49,13 @@ var errorMessages = map[ErrorKind]string{
 	ErrMissingForLeftParen:        "missing '(' after 'for'",
 	ErrMissingForRightParen:       "missing ')' after for clauses",
 	ErrMissingConditionSemicolon:  "missing ';' after loop condition",
+	ErrArgumentsRightParen:        "missing ')' after arguments",
+	ErrFunctionName:               "missing function name",
+	ErrFunctionLeftParen:          "missing '(' after function name",
+	ErrFunctionRightParen:         "missing ')' after parameters",
+	ErrParameterName:              "missing parameter name",
+	ErrFunctionLeftBrace:          "missing '{' before function body",
+	ErrReturnSemicolon:            "missing ';' after return value",
 }
 
 func (k ErrorKind) String() string {
