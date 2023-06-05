@@ -7,37 +7,12 @@ import (
 	"github.com/lukibw/glox/token"
 )
 
-type RuntimeErrorKind int
-
-const (
-	ErrNumberOperand RuntimeErrorKind = iota
-	ErrNumberOperands
-	ErrNumberOrStringOperands
-)
-
-var runtimeErrorMessages = map[RuntimeErrorKind]string{
-	ErrNumberOperand:          "operand must be a number",
-	ErrNumberOperands:         "operands must be numbers",
-	ErrNumberOrStringOperands: "operands must be two numbers or two strings",
+type Interpreter struct {
+	env *Env
 }
-
-func (k RuntimeErrorKind) String() string {
-	return runtimeErrorMessages[k]
-}
-
-type RuntimeError struct {
-	Token token.Token
-	Kind  RuntimeErrorKind
-}
-
-func (e *RuntimeError) Error() string {
-	return fmt.Sprintf("%s\n[line %d]", e.Kind, e.Token.Line)
-}
-
-type Interpreter struct{}
 
 func NewInterpreter() *Interpreter {
-	return &Interpreter{}
+	return &Interpreter{NewEnv(nil)}
 }
 
 func (i *Interpreter) stringify(value any) string {
@@ -77,12 +52,40 @@ func (i *Interpreter) evaluate(expr Expr[any]) (any, error) {
 	return expr.Accept(i)
 }
 
-func (i *Interpreter) Interpret(expr Expr[any]) (string, error) {
-	v, err := i.evaluate(expr)
-	if err != nil {
-		return "", err
+func (i *Interpreter) execute(stmt Stmt[any]) (any, error) {
+	return stmt.Accept(i)
+}
+
+func (i *Interpreter) executeBlock(statements []Stmt[any], env *Env) (any, error) {
+	var err error
+	previous := i.env
+	i.env = env
+	for _, statement := range statements {
+		_, err = i.execute(statement)
+		if err != nil {
+			break
+		}
 	}
-	return i.stringify(v), nil
+	i.env = previous
+	return nil, err
+}
+
+func (i *Interpreter) Interpret(statements []Stmt[any]) error {
+	for _, statement := range statements {
+		if _, err := i.execute(statement); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (i *Interpreter) VisitAssignExpr(expr *AssignExpr[any]) (any, error) {
+	value, err := i.evaluate(expr.Value)
+	if err != nil {
+		return nil, err
+	}
+	i.env.Assign(expr.Name, value)
+	return value, nil
 }
 
 func (i *Interpreter) VisitBinaryExpr(expr *BinaryExpr[any]) (any, error) {
@@ -176,4 +179,39 @@ func (i *Interpreter) VisitUnaryExpr(expr *UnaryExpr[any]) (any, error) {
 		return !i.isTruthy(right), nil
 	}
 	panic("fix this")
+}
+
+func (i *Interpreter) VisitVariableExpr(expr *VariableExpr[any]) (any, error) {
+	return i.env.Get(expr.Name)
+}
+
+func (i *Interpreter) VisitExpressionStmt(stmt *ExpressionStmt[any]) (any, error) {
+	_, err := i.evaluate(stmt.Expression)
+	return nil, err
+}
+
+func (i *Interpreter) VisitPrintStmt(stmt *PrintStmt[any]) (any, error) {
+	v, err := i.evaluate(stmt.Expression)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(i.stringify(v))
+	return nil, nil
+}
+
+func (i *Interpreter) VisitBlockStmt(stmt *BlockStmt[any]) (any, error) {
+	return i.executeBlock(stmt.Statements, NewEnv(i.env))
+}
+
+func (i *Interpreter) VisitVarStmt(stmt *VarStmt[any]) (any, error) {
+	var value any
+	if stmt.Initializer != nil {
+		var err error
+		value, err = i.evaluate(stmt.Initializer)
+		if err != nil {
+			return nil, err
+		}
+	}
+	i.env.Define(stmt.Name.Lexeme, value)
+	return nil, nil
 }

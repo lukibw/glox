@@ -54,12 +54,127 @@ func (p *Parser[T]) match(kinds ...token.Kind) bool {
 	return false
 }
 
-func (p *Parser[T]) Parse() (ast.Expr[T], error) {
-	return p.expression()
+func (p *Parser[T]) consume(tokenKind token.Kind, errorKind ErrorKind) (token.Token, error) {
+	if p.check(tokenKind) {
+		return p.advance(), nil
+	}
+	return token.Token{}, p.newError(errorKind)
+}
+
+func (p *Parser[T]) Parse() ([]ast.Stmt[T], []error) {
+	statements := make([]ast.Stmt[T], 0)
+	errors := make([]error, 0)
+	for !p.isAtEnd() {
+		stmt, err := p.declaration()
+		if err != nil {
+			errors = append(errors, err)
+			p.synchronize()
+		} else {
+			statements = append(statements, stmt)
+		}
+	}
+	return statements, errors
+}
+
+func (p *Parser[T]) declaration() (ast.Stmt[T], error) {
+	if p.match(token.Var) {
+		return p.varDeclaration()
+	}
+	return p.statement()
+}
+
+func (p *Parser[T]) varDeclaration() (ast.Stmt[T], error) {
+	name, err := p.consume(token.Identifier, ErrMissingVariableName)
+	if err != nil {
+		return nil, err
+	}
+	var initializer ast.Expr[T]
+	if p.match(token.Equal) {
+		initializer, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = p.consume(token.Semicolon, ErrMissingVarSemicolon)
+	if err != nil {
+		return nil, err
+	}
+	return &ast.VarStmt[T]{Name: name, Initializer: initializer}, nil
+}
+
+func (p *Parser[T]) statement() (ast.Stmt[T], error) {
+	switch {
+	case p.match(token.Print):
+		return p.printStatement()
+	case p.match(token.LeftBrace):
+		statements, err := p.block()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.BlockStmt[T]{Statements: statements}, nil
+	default:
+		return p.expressionStatement()
+	}
+}
+
+func (p *Parser[T]) printStatement() (ast.Stmt[T], error) {
+	expr, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = p.consume(token.Semicolon, ErrMissingValueSemicolon); err != nil {
+		return nil, err
+	}
+	return &ast.PrintStmt[T]{Expression: expr}, nil
+}
+
+func (p *Parser[T]) block() ([]ast.Stmt[T], error) {
+	statements := make([]ast.Stmt[T], 0)
+	for !p.check(token.RightBrace) && !p.isAtEnd() {
+		decl, err := p.declaration()
+		if err != nil {
+			return nil, err
+		}
+		statements = append(statements, decl)
+	}
+	if _, err := p.consume(token.RightBrace, ErrMissingRightBrace); err != nil {
+		return nil, err
+	}
+	return statements, nil
+}
+
+func (p *Parser[T]) expressionStatement() (ast.Stmt[T], error) {
+	expr, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = p.consume(token.Semicolon, ErrMissingExprSemicolon); err != nil {
+		return nil, err
+	}
+	return &ast.ExpressionStmt[T]{Expression: expr}, nil
 }
 
 func (p *Parser[T]) expression() (ast.Expr[T], error) {
 	return p.equality()
+}
+
+func (p *Parser[T]) assignment() (ast.Expr[T], error) {
+	expr, err := p.equality()
+	if err != nil {
+		return nil, err
+	}
+	if p.match(token.Equal) {
+		equals := p.previous()
+		value, err := p.assignment()
+		if err != nil {
+			return nil, err
+		}
+		if v, ok := expr.(*ast.VariableExpr[T]); ok {
+			return &ast.AssignExpr[T]{Name: v.Name, Value: value}, nil
+		}
+		return nil, &Error{equals, ErrAssignTarget}
+	}
+	return expr, nil
 }
 
 func (p *Parser[T]) equality() (ast.Expr[T], error) {
@@ -167,44 +282,44 @@ func (p *Parser[T]) primary() (ast.Expr[T], error) {
 		return &ast.LiteralExpr[T]{Value: nil}, nil
 	case p.match(token.Number, token.String):
 		return &ast.LiteralExpr[T]{Value: p.previous().Literal}, nil
+	case p.match(token.Identifier):
+		return &ast.VariableExpr[T]{Name: p.previous()}, nil
 	case p.match(token.LeftParen):
 		expr, err := p.expression()
 		if err != nil {
 			return nil, err
 		}
-		if p.check(token.RightParen) {
-			p.advance()
-		} else {
-			return nil, p.newError(ErrMissingRightParen)
+		if _, err = p.consume(token.RightParen, ErrMissingRightParen); err != nil {
+			return nil, err
 		}
 		return &ast.GroupingExpr[T]{Expression: expr}, nil
 	}
 	return nil, p.newError(ErrMissingExpr)
 }
 
-// var newStatementTokenKinds = []token.Kind{
-// 	token.Class,
-// 	token.Fun,
-// 	token.Var,
-// 	token.For,
-// 	token.If,
-// 	token.While,
-// 	token.Print,
-// 	token.Return,
-// }
+var newStatementTokenKinds = []token.Kind{
+	token.Class,
+	token.Fun,
+	token.Var,
+	token.For,
+	token.If,
+	token.While,
+	token.Print,
+	token.Return,
+}
 
-// func (p *Parser[T]) synchronize() {
-// 	p.advance()
-// 	for !p.isAtEnd() {
-// 		if p.previous().Kind == token.Semicolon {
-// 			return
-// 		}
-// 		kind := p.peek().Kind
-// 		for _, k := range newStatementTokenKinds {
-// 			if kind == k {
-// 				return
-// 			}
-// 		}
-// 		p.advance()
-// 	}
-// }
+func (p *Parser[T]) synchronize() {
+	p.advance()
+	for !p.isAtEnd() {
+		if p.previous().Kind == token.Semicolon {
+			return
+		}
+		kind := p.peek().Kind
+		for _, k := range newStatementTokenKinds {
+			if kind == k {
+				return
+			}
+		}
+		p.advance()
+	}
+}

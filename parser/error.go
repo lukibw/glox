@@ -10,12 +10,24 @@ type ErrorKind int
 
 const (
 	ErrMissingRightParen ErrorKind = iota
+	ErrMissingValueSemicolon
+	ErrMissingExprSemicolon
+	ErrMissingVarSemicolon
 	ErrMissingExpr
+	ErrMissingVariableName
+	ErrAssignTarget
+	ErrMissingRightBrace
 )
 
 var errorMessages = map[ErrorKind]string{
-	ErrMissingRightParen: "expected ')' after expression",
-	ErrMissingExpr:       "expected expression",
+	ErrMissingRightParen:     "expected ')' after expression",
+	ErrMissingValueSemicolon: "expected ';' after value",
+	ErrMissingExprSemicolon:  "expected ';' after expression",
+	ErrMissingVarSemicolon:   "expected ';' after variable declaration",
+	ErrMissingExpr:           "expected expression",
+	ErrMissingVariableName:   "expected variable name",
+	ErrAssignTarget:          "invalid assignment target",
+	ErrMissingRightBrace:     "expected '}' after block",
 }
 
 func (k ErrorKind) String() string {

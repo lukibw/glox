@@ -21,14 +21,16 @@ func main() {
 		log.Fatalln(err)
 	}
 	parser := parser.New[any](tokens)
-	expr, err := parser.Parse()
-	if err != nil {
-		log.Fatalln(err)
+	statements, errs := parser.Parse()
+	if len(errs) > 0 {
+		for _, err := range errs {
+			fmt.Println(err)
+		}
+		os.Exit(1)
 	}
 	interpreter := ast.NewInterpreter()
-	result, err := interpreter.Interpret(expr)
+	err = interpreter.Interpret(statements)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	fmt.Println(result)
 }
