@@ -186,6 +186,23 @@ func (i *Interpreter) VisitVarExpr(expr *ast.VarExpr) (any, error) {
 	return i.env.get(expr.Name)
 }
 
+func (i *Interpreter) VisitLogicalExpr(expr *ast.LogicalExpr) (any, error) {
+	left, err := i.evaluate(expr.Left)
+	if err != nil {
+		return nil, err
+	}
+	if expr.Operator.Kind == ast.Or {
+		if i.isTruthy(left) {
+			return left, nil
+		}
+	} else {
+		if !i.isTruthy(left) {
+			return left, nil
+		}
+	}
+	return i.evaluate(expr.Right)
+}
+
 func (i *Interpreter) VisitExpressionStmt(stmt *ast.ExpressionStmt) error {
 	_, err := i.evaluate(stmt.Expression)
 	return err
@@ -214,5 +231,38 @@ func (i *Interpreter) VisitVarStmt(stmt *ast.VarStmt) error {
 		}
 	}
 	i.env.define(stmt.Name.Lexeme, value)
+	return nil
+}
+
+func (i *Interpreter) VisitIfStmt(stmt *ast.IfStmt) error {
+	value, err := i.evaluate(stmt.Condition)
+	if err != nil {
+		return err
+	}
+	if i.isTruthy(value) {
+		if err = i.execute(stmt.ThenBranch); err != nil {
+			return err
+		}
+	} else if stmt.ElseBranch != nil {
+		if err = i.execute(stmt.ElseBranch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (i *Interpreter) VisitWhileStmt(stmt *ast.WhileStmt) error {
+	for {
+		value, err := i.evaluate(stmt.Condition)
+		if err != nil {
+			return err
+		}
+		if !i.isTruthy(value) {
+			break
+		}
+		if err = i.execute(stmt.Body); err != nil {
+			return err
+		}
+	}
 	return nil
 }

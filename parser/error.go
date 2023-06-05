@@ -17,17 +17,31 @@ const (
 	ErrMissingExpr
 	ErrMissingVariableName
 	ErrInvalidAssignTarget
+	ErrMissingIfLeftParen
+	ErrMissingWhileLeftParen
+	ErrMissingIfRightParen
+	ErrMissingConditionRightParen
+	ErrMissingForLeftParen
+	ErrMissingForRightParen
+	ErrMissingConditionSemicolon
 )
 
 var errorMessages = map[ErrorKind]string{
-	ErrMissingRightParen:     "missing ')' after expression",
-	ErrMissingRightBrace:     "missing '}' after block",
-	ErrMissingValueSemicolon: "missing ';' after value",
-	ErrMissingExprSemicolon:  "missing ';' after expression",
-	ErrMissingVarSemicolon:   "missing ';' after variable declaration",
-	ErrMissingExpr:           "missing expression",
-	ErrMissingVariableName:   "missing variable name",
-	ErrInvalidAssignTarget:   "invalid assignment target",
+	ErrMissingRightParen:          "missing ')' after expression",
+	ErrMissingRightBrace:          "missing '}' after block",
+	ErrMissingValueSemicolon:      "missing ';' after value",
+	ErrMissingExprSemicolon:       "missing ';' after expression",
+	ErrMissingVarSemicolon:        "missing ';' after variable declaration",
+	ErrMissingExpr:                "missing expression",
+	ErrMissingVariableName:        "missing variable name",
+	ErrInvalidAssignTarget:        "invalid assignment target",
+	ErrMissingIfLeftParen:         "missing '(' after 'if'",
+	ErrMissingIfRightParen:        "missing ')' after 'if' condition",
+	ErrMissingWhileLeftParen:      "missing '(' after 'while'",
+	ErrMissingConditionRightParen: "missing ')' after condition",
+	ErrMissingForLeftParen:        "missing '(' after 'for'",
+	ErrMissingForRightParen:       "missing ')' after for clauses",
+	ErrMissingConditionSemicolon:  "missing ';' after loop condition",
 }
 
 func (k ErrorKind) String() string {
