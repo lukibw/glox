@@ -1,36 +1,36 @@
-package ast
+package interpreter
 
 import (
 	"fmt"
 
-	"github.com/lukibw/glox/token"
+	"github.com/lukibw/glox/ast"
 )
 
-type RuntimeErrorKind int
+type ErrorKind int
 
 const (
-	ErrNumberOperand RuntimeErrorKind = iota
+	ErrNumberOperand ErrorKind = iota
 	ErrNumberOperands
 	ErrNumberOrStringOperands
 	ErrUndefinedVariable
 )
 
-var runtimeErrorMessages = map[RuntimeErrorKind]string{
+var runtimeErrorMessages = map[ErrorKind]string{
 	ErrNumberOperand:          "operand must be a number",
 	ErrNumberOperands:         "operands must be numbers",
 	ErrNumberOrStringOperands: "operands must be two numbers or two strings",
 	ErrUndefinedVariable:      "undefined variable",
 }
 
-func (k RuntimeErrorKind) String() string {
+func (k ErrorKind) String() string {
 	return runtimeErrorMessages[k]
 }
 
-type RuntimeError struct {
-	Token token.Token
-	Kind  RuntimeErrorKind
+type Error struct {
+	Token ast.Token
+	Kind  ErrorKind
 }
 
-func (e *RuntimeError) Error() string {
+func (e *Error) Error() string {
 	return fmt.Sprintf("%s\n[line %d]", e.Kind, e.Token.Line)
 }

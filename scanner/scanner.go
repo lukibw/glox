@@ -1,10 +1,9 @@
 package scanner
 
 import (
-	"fmt"
 	"strconv"
 
-	"github.com/lukibw/glox/token"
+	"github.com/lukibw/glox/ast"
 )
 
 type Scanner struct {
@@ -12,11 +11,15 @@ type Scanner struct {
 	start   int
 	current int
 	line    int
-	tokens  []token.Token
+	tokens  []ast.Token
 }
 
 func New(source string) *Scanner {
-	return &Scanner{[]rune(source), 0, 0, 1, make([]token.Token, 0)}
+	return &Scanner{[]rune(source), 0, 0, 1, make([]ast.Token, 0)}
+}
+
+func (s *Scanner) newError(kind ErrorKind) error {
+	return &Error{s.line, kind}
 }
 
 func (s *Scanner) isAtEnd() bool {
@@ -51,10 +54,10 @@ func (s *Scanner) peekNext() rune {
 	return s.source[s.current+1]
 }
 
-func (s *Scanner) addTokenWithLiteral(kind token.Kind, literal interface{}) {
+func (s *Scanner) addTokenWithLiteral(kind ast.TokenKind, literal interface{}) {
 	s.tokens = append(
 		s.tokens,
-		token.Token{
+		ast.Token{
 			Kind:    kind,
 			Lexeme:  string(s.source[s.start:s.current]),
 			Literal: literal,
@@ -63,11 +66,11 @@ func (s *Scanner) addTokenWithLiteral(kind token.Kind, literal interface{}) {
 	)
 }
 
-func (s *Scanner) addToken(kind token.Kind) {
+func (s *Scanner) addToken(kind ast.TokenKind) {
 	s.addTokenWithLiteral(kind, nil)
 }
 
-func (s *Scanner) string() {
+func (s *Scanner) string() error {
 	for s.peek() != '"' && !s.isAtEnd() {
 		if s.peek() == '\n' {
 			s.line++
@@ -75,12 +78,12 @@ func (s *Scanner) string() {
 		s.advance()
 	}
 	if s.isAtEnd() {
-		fmt.Println("Unterminated string")
-		return
+		return s.newError(ErrUnterminatedString)
 	}
 	s.advance()
 	value := string(s.source[(s.start + 1):(s.current - 1)])
-	s.addTokenWithLiteral(token.String, value)
+	s.addTokenWithLiteral(ast.String, value)
+	return nil
 }
 
 func (s *Scanner) number() {
@@ -95,9 +98,28 @@ func (s *Scanner) number() {
 	}
 	value, err := strconv.ParseFloat(string(s.source[s.start:s.current]), 64)
 	if err != nil {
-		panic("scan: cannot parse a float")
+		panic("scanner: cannot parse a float")
 	}
-	s.addTokenWithLiteral(token.Number, value)
+	s.addTokenWithLiteral(ast.Number, value)
+}
+
+var keywords = map[string]ast.TokenKind{
+	"and":    ast.And,
+	"class":  ast.Class,
+	"else":   ast.Else,
+	"false":  ast.False,
+	"for":    ast.For,
+	"fun":    ast.Fun,
+	"if":     ast.If,
+	"nil":    ast.Nil,
+	"or":     ast.Or,
+	"print":  ast.Print,
+	"return": ast.Return,
+	"super":  ast.Super,
+	"this":   ast.This,
+	"true":   ast.True,
+	"var":    ast.Var,
+	"while":  ast.While,
 }
 
 func (s *Scanner) identifier() {
@@ -107,73 +129,74 @@ func (s *Scanner) identifier() {
 	value := string(s.source[s.start:s.current])
 	kind, ok := keywords[value]
 	if !ok {
-		kind = token.Identifier
+		kind = ast.Identifier
 	}
 	s.addToken(kind)
 }
 
-func (s *Scanner) scanToken() {
+func (s *Scanner) token() error {
 	r := s.advance()
 	switch r {
 	case '(':
-		s.addToken(token.LeftParen)
+		s.addToken(ast.LeftParen)
 	case ')':
-		s.addToken(token.RightParen)
+		s.addToken(ast.RightParen)
 	case '{':
-		s.addToken(token.LeftBrace)
+		s.addToken(ast.LeftBrace)
 	case '}':
-		s.addToken(token.RightBrace)
+		s.addToken(ast.RightBrace)
 	case ',':
-		s.addToken(token.Comma)
+		s.addToken(ast.Comma)
 	case '.':
-		s.addToken(token.Dot)
+		s.addToken(ast.Dot)
 	case '-':
-		s.addToken(token.Minus)
+		s.addToken(ast.Minus)
 	case '+':
-		s.addToken(token.Plus)
+		s.addToken(ast.Plus)
 	case ';':
-		s.addToken(token.Semicolon)
+		s.addToken(ast.Semicolon)
 	case '*':
-		s.addToken(token.Star)
+		s.addToken(ast.Star)
 	case '!':
 		if s.match('=') {
-			s.addToken(token.BangEqual)
+			s.addToken(ast.BangEqual)
 		} else {
-			s.addToken(token.Bang)
+			s.addToken(ast.Bang)
 		}
 	case '=':
 		if s.match('=') {
-			s.addToken(token.EqualEqual)
+			s.addToken(ast.EqualEqual)
 		} else {
-			s.addToken(token.Equal)
+			s.addToken(ast.Equal)
 		}
 	case '<':
 		if s.match('=') {
-			s.addToken(token.LessEqual)
+			s.addToken(ast.LessEqual)
 		} else {
-			s.addToken(token.Less)
+			s.addToken(ast.Less)
 		}
 	case '>':
 		if s.match('=') {
-			s.addToken(token.GreaterEqual)
+			s.addToken(ast.GreaterEqual)
 		} else {
-			s.addToken(token.Greater)
+			s.addToken(ast.Greater)
 		}
 	case '/':
 		if s.match('/') {
-			// A comment goes until the end of the line.
 			for !s.isAtEnd() && s.peek() != '\n' {
 				s.advance()
 			}
 		} else {
-			s.addToken(token.Slash)
+			s.addToken(ast.Slash)
 		}
 	case ' ', '\t', '\r':
 		break
 	case '\n':
 		s.line++
 	case '"':
-		s.string()
+		if err := s.string(); err != nil {
+			return err
+		}
 	default:
 		switch {
 		case isDigit(r):
@@ -181,24 +204,23 @@ func (s *Scanner) scanToken() {
 		case isAlpha(r):
 			s.identifier()
 		default:
-			fmt.Printf("Unexpected character in line %d\n", s.line)
+			return s.newError(ErrUnexpectedCharacter)
 		}
 	}
+	return nil
 }
 
-func (s *Scanner) ScanTokens() ([]token.Token, error) {
+func (s *Scanner) Run() ([]ast.Token, error) {
+	var err error
 	for !s.isAtEnd() {
 		s.start = s.current
-		s.scanToken()
+		if err = s.token(); err != nil {
+			return nil, err
+		}
 	}
 	s.tokens = append(
 		s.tokens,
-		token.Token{
-			Kind:    token.Eof,
-			Lexeme:  "",
-			Literal: nil,
-			Line:    s.line,
-		},
+		ast.Token{Kind: ast.Eof, Line: s.line},
 	)
 	return s.tokens, nil
 }

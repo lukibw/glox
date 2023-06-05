@@ -1,9 +1,9 @@
-package token
+package ast
 
-type Kind int
+type TokenKind int
 
 const (
-	LeftParen Kind = iota
+	LeftParen TokenKind = iota
 	RightParen
 	LeftBrace
 	RightBrace
@@ -45,8 +45,8 @@ const (
 )
 
 type Token struct {
-	Kind    Kind
+	Kind    TokenKind
 	Lexeme  string
-	Literal interface{}
+	Literal any
 	Line    int
 }
