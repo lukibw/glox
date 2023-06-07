@@ -1,18 +1,7 @@
 package ast
 
 type Expr interface {
-	Accept(ExprVisitor) (any, error)
-}
-
-type ExprVisitor interface {
-	VisitAssignExpr(*AssignExpr) (any, error)
-	VisitBinaryExpr(*BinaryExpr) (any, error)
-	VisitGroupingExpr(*GroupingExpr) (any, error)
-	VisitLiteralExpr(*LiteralExpr) (any, error)
-	VisitUnaryExpr(*UnaryExpr) (any, error)
-	VisitVarExpr(*VarExpr) (any, error)
-	VisitLogicalExpr(*LogicalExpr) (any, error)
-	VisitCallExpr(*CallExpr) (any, error)
+	expr()
 }
 
 type AssignExpr struct {
@@ -20,9 +9,7 @@ type AssignExpr struct {
 	Value Expr
 }
 
-func (e *AssignExpr) Accept(v ExprVisitor) (any, error) {
-	return v.VisitAssignExpr(e)
-}
+func (e *AssignExpr) expr() {}
 
 type BinaryExpr struct {
 	Left     Expr
@@ -30,52 +17,7 @@ type BinaryExpr struct {
 	Right    Expr
 }
 
-func (e *BinaryExpr) Accept(v ExprVisitor) (any, error) {
-	return v.VisitBinaryExpr(e)
-}
-
-type GroupingExpr struct {
-	Expression Expr
-}
-
-func (e *GroupingExpr) Accept(v ExprVisitor) (any, error) {
-	return v.VisitGroupingExpr(e)
-}
-
-type LiteralExpr struct {
-	Value any
-}
-
-func (e *LiteralExpr) Accept(v ExprVisitor) (any, error) {
-	return v.VisitLiteralExpr(e)
-}
-
-type UnaryExpr struct {
-	Operator Token
-	Right    Expr
-}
-
-func (e *UnaryExpr) Accept(v ExprVisitor) (any, error) {
-	return v.VisitUnaryExpr(e)
-}
-
-type VarExpr struct {
-	Name Token
-}
-
-func (e *VarExpr) Accept(v ExprVisitor) (any, error) {
-	return v.VisitVarExpr(e)
-}
-
-type LogicalExpr struct {
-	Left     Expr
-	Operator Token
-	Right    Expr
-}
-
-func (e *LogicalExpr) Accept(v ExprVisitor) (any, error) {
-	return v.VisitLogicalExpr(e)
-}
+func (e *BinaryExpr) expr() {}
 
 type CallExpr struct {
 	Callee    Expr
@@ -83,6 +25,37 @@ type CallExpr struct {
 	Arguments []Expr
 }
 
-func (e *CallExpr) Accept(v ExprVisitor) (any, error) {
-	return v.VisitCallExpr(e)
+func (e *CallExpr) expr() {}
+
+type GroupingExpr struct {
+	Expression Expr
 }
+
+func (e *GroupingExpr) expr() {}
+
+type LiteralExpr struct {
+	Value any
+}
+
+func (e *LiteralExpr) expr() {}
+
+type LogicalExpr struct {
+	Left     Expr
+	Operator Token
+	Right    Expr
+}
+
+func (e *LogicalExpr) expr() {}
+
+type UnaryExpr struct {
+	Operator Token
+	Right    Expr
+}
+
+func (e *UnaryExpr) expr() {}
+
+type VarExpr struct {
+	Name Token
+}
+
+func (e *VarExpr) expr() {}

@@ -7,46 +7,42 @@ import (
 	"github.com/lukibw/glox/ast"
 )
 
-type Callable interface {
-	Arity() int
-	Call(*Interpreter, []any) (any, error)
+type callable interface {
+	arity() int
+	call(*Interpreter, []any) (any, error)
 }
 
-type Function struct {
-	Declaration *ast.FunctionStmt
-	Closure     *env
+type function struct {
+	declaration *ast.FunctionStmt
+	closure     *env
 }
 
-func (f *Function) Arity() int {
-	return len(f.Declaration.Params)
+func (f *function) arity() int {
+	return len(f.declaration.Params)
 }
 
-func (f *Function) Call(interpreter *Interpreter, args []any) (any, error) {
-	env := newEnv(f.Closure)
-	for i := 0; i < len(f.Declaration.Params); i++ {
-		env.define(f.Declaration.Params[i].Lexeme, args[i])
+func (f *function) call(interpreter *Interpreter, args []any) (any, error) {
+	env := newEnv(f.closure)
+	for i := 0; i < len(f.declaration.Params); i++ {
+		env.define(f.declaration.Params[i].Lexeme, args[i])
 	}
-	err := interpreter.executeBlock(f.Declaration.Body, env)
-	if rerr, ok := err.(*returnError); ok {
-		return rerr.value, nil
-	}
-	return nil, err
+	return interpreter.executeBlock(f.declaration.Body, env)
 }
 
-func (f *Function) String() string {
-	return fmt.Sprintf("<fn %s>", f.Declaration.Name.Lexeme)
+func (f *function) String() string {
+	return fmt.Sprintf("<fn %s>", f.declaration.Name.Lexeme)
 }
 
-type Clock struct{}
+type clock struct{}
 
-func (c *Clock) Arity() int {
+func (c *clock) arity() int {
 	return 0
 }
 
-func (c *Clock) Call(interpreter *Interpreter, args []any) (any, error) {
+func (c *clock) call(interpreter *Interpreter, args []any) (any, error) {
 	return float64(time.Now().Unix()) / 1000.0, nil
 }
 
-func (c *Clock) String() string {
+func (c *clock) String() string {
 	return "<native fn>"
 }

@@ -14,76 +14,85 @@ type Interpreter struct {
 
 func New() *Interpreter {
 	globals := newEnv(nil)
-	globals.define("clock", Clock{})
+	globals.define("clock", clock{})
 	return &Interpreter{globals, globals}
 }
 
-func (i *Interpreter) stringify(value any) string {
-	if value == nil {
-		return "nil"
-	}
-	return fmt.Sprint(value)
-}
-
-func (i *Interpreter) isTruthy(value any) bool {
-	if value == nil {
-		return false
-	}
-	if v, ok := value.(bool); ok {
-		return v
-	}
-	return true
-}
-
-func (i *Interpreter) checkNumberOperand(operator ast.Token, operand any) error {
-	if _, ok := operand.(float64); ok {
-		return nil
-	}
-	return &Error{operator, ErrNumberOperand}
-}
-
-func (i *Interpreter) checkNumberOperands(operator ast.Token, left, right any) error {
-	_, left_ok := left.(float64)
-	_, right_ok := right.(float64)
-	if left_ok && right_ok {
-		return nil
-	}
-	return &Error{operator, ErrNumberOperands}
-}
-
 func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
-	return expr.Accept(i)
+	switch e := expr.(type) {
+	case *ast.AssignExpr:
+		return i.assignExpr(e)
+	case *ast.BinaryExpr:
+		return i.binaryExpr(e)
+	case *ast.CallExpr:
+		return i.callExpr(e)
+	case *ast.GroupingExpr:
+		return i.groupingExpr(e)
+	case *ast.LogicalExpr:
+		return i.logicalExpr(e)
+	case *ast.LiteralExpr:
+		return i.literalExpr(e)
+	case *ast.UnaryExpr:
+		return i.unaryExpr(e)
+	case *ast.VarExpr:
+		return i.varExpr(e)
+	default:
+		panic(fmt.Sprintf("interpreter: cannot evaluate an expression of type %T", e))
+	}
 }
 
-func (i *Interpreter) execute(stmt ast.Stmt) error {
-	return stmt.Accept(i)
+func (i *Interpreter) execute(stmt ast.Stmt) (any, error) {
+	switch s := stmt.(type) {
+	case *ast.BlockStmt:
+		return i.blockStmt(s)
+	case *ast.ExpressionStmt:
+		return i.expressionStmt(s)
+	case *ast.FunctionStmt:
+		return i.functionStmt(s)
+	case *ast.IfStmt:
+		return i.ifStmt(s)
+	case *ast.PrintStmt:
+		return i.printStmt(s)
+	case *ast.ReturnStmt:
+		return i.returnStmt(s)
+	case *ast.WhileStmt:
+		return i.whileStmt(s)
+	case *ast.VarStmt:
+		return i.varStmt(s)
+	default:
+		panic(fmt.Sprintf("resolver: cannot execute a statement of type %T", s))
+	}
 }
 
-func (i *Interpreter) executeBlock(statements []ast.Stmt, env *env) error {
-	var err error
+func (i *Interpreter) executeBlock(stmts []ast.Stmt, env *env) (any, error) {
 	previous := i.env
 	i.env = env
-	for _, statement := range statements {
-		err = i.execute(statement)
+	defer func() {
+		i.env = previous
+	}()
+	for _, stmt := range stmts {
+		value, err := i.execute(stmt)
 		if err != nil {
-			break
+			return nil, err
+		}
+		if value != nil {
+			return value, nil
 		}
 	}
-	i.env = previous
-	return err
+	return nil, nil
 }
 
-func (i *Interpreter) Run(statements []ast.Stmt) error {
+func (i *Interpreter) Run(stmts []ast.Stmt) error {
 	var err error
-	for _, statement := range statements {
-		if err = i.execute(statement); err != nil {
+	for _, stmt := range stmts {
+		if _, err = i.execute(stmt); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (i *Interpreter) VisitAssignExpr(expr *ast.AssignExpr) (any, error) {
+func (i *Interpreter) assignExpr(expr *ast.AssignExpr) (any, error) {
 	value, err := i.evaluate(expr.Value)
 	if err != nil {
 		return nil, err
@@ -92,7 +101,7 @@ func (i *Interpreter) VisitAssignExpr(expr *ast.AssignExpr) (any, error) {
 	return value, nil
 }
 
-func (i *Interpreter) VisitBinaryExpr(expr *ast.BinaryExpr) (any, error) {
+func (i *Interpreter) binaryExpr(expr *ast.BinaryExpr) (any, error) {
 	left, err := i.evaluate(expr.Left)
 	if err != nil {
 		return nil, err
@@ -118,37 +127,37 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.BinaryExpr) (any, error) {
 		}
 		return nil, &Error{expr.Operator, ErrNumberOrStringOperands}
 	case ast.Minus:
-		if err := i.checkNumberOperands(expr.Operator, left, right); err != nil {
+		if err := checkNumberOperands(expr.Operator, left, right); err != nil {
 			return nil, err
 		}
 		return left.(float64) - right.(float64), nil
 	case ast.Slash:
-		if err := i.checkNumberOperands(expr.Operator, left, right); err != nil {
+		if err := checkNumberOperands(expr.Operator, left, right); err != nil {
 			return nil, err
 		}
 		return left.(float64) / right.(float64), nil
 	case ast.Star:
-		if err := i.checkNumberOperands(expr.Operator, left, right); err != nil {
+		if err := checkNumberOperands(expr.Operator, left, right); err != nil {
 			return nil, err
 		}
 		return left.(float64) * right.(float64), nil
 	case ast.Greater:
-		if err := i.checkNumberOperands(expr.Operator, left, right); err != nil {
+		if err := checkNumberOperands(expr.Operator, left, right); err != nil {
 			return nil, err
 		}
 		return left.(float64) > right.(float64), nil
 	case ast.GreaterEqual:
-		if err := i.checkNumberOperands(expr.Operator, left, right); err != nil {
+		if err := checkNumberOperands(expr.Operator, left, right); err != nil {
 			return nil, err
 		}
 		return left.(float64) >= right.(float64), nil
 	case ast.Less:
-		if err := i.checkNumberOperands(expr.Operator, left, right); err != nil {
+		if err := checkNumberOperands(expr.Operator, left, right); err != nil {
 			return nil, err
 		}
 		return left.(float64) < right.(float64), nil
 	case ast.LessEqual:
-		if err := i.checkNumberOperands(expr.Operator, left, right); err != nil {
+		if err := checkNumberOperands(expr.Operator, left, right); err != nil {
 			return nil, err
 		}
 		return left.(float64) <= right.(float64), nil
@@ -160,168 +169,149 @@ func (i *Interpreter) VisitBinaryExpr(expr *ast.BinaryExpr) (any, error) {
 	panic("interpreter: cannot match operator for binary expression")
 }
 
-func (i *Interpreter) VisitGroupingExpr(expr *ast.GroupingExpr) (any, error) {
-	return i.evaluate(expr.Expression)
-}
-
-func (i *Interpreter) VisitLiteralExpr(expr *ast.LiteralExpr) (any, error) {
-	return expr.Value, nil
-}
-
-func (i *Interpreter) VisitUnaryExpr(expr *ast.UnaryExpr) (any, error) {
-	right, err := i.evaluate(expr.Right)
-	if err != nil {
-		return nil, err
-	}
-	switch expr.Operator.Kind {
-	case ast.Minus:
-		if err := i.checkNumberOperand(expr.Operator, right); err != nil {
-			return nil, err
-		}
-		return -right.(float64), nil
-	case ast.Bang:
-		return !i.isTruthy(right), nil
-	}
-	panic("interpreter: cannot match operator for unary expression")
-}
-
-func (i *Interpreter) VisitVarExpr(expr *ast.VarExpr) (any, error) {
-	return i.env.get(expr.Name)
-}
-
-func (i *Interpreter) VisitLogicalExpr(expr *ast.LogicalExpr) (any, error) {
-	left, err := i.evaluate(expr.Left)
-	if err != nil {
-		return nil, err
-	}
-	if expr.Operator.Kind == ast.Or {
-		if i.isTruthy(left) {
-			return left, nil
-		}
-	} else {
-		if !i.isTruthy(left) {
-			return left, nil
-		}
-	}
-	return i.evaluate(expr.Right)
-}
-
-func (i *Interpreter) VisitCallExpr(expr *ast.CallExpr) (any, error) {
+func (i *Interpreter) callExpr(expr *ast.CallExpr) (any, error) {
 	callee, err := i.evaluate(expr.Callee)
 	if err != nil {
 		return nil, err
 	}
 	arguments := make([]any, len(expr.Arguments))
 	for k := 0; k < len(expr.Arguments); k++ {
-		arg, err := i.evaluate(expr.Arguments[k])
+		arguments[k], err = i.evaluate(expr.Arguments[k])
 		if err != nil {
 			return nil, err
 		}
-		arguments[k] = arg
 	}
-	function, ok := callee.(Callable)
+	fn, ok := callee.(callable)
 	if !ok {
 		return nil, &Error{expr.Paren, ErrFunctionOrClassCallable}
 	}
-	if function.Arity() > len(arguments) {
+	if fn.arity() > len(arguments) {
 		return nil, &Error{expr.Paren, ErrFunctionTooFewArgs}
 	}
-	if function.Arity() < len(arguments) {
+	if fn.arity() < len(arguments) {
 		return nil, &Error{expr.Paren, ErrFunctionTooManyArgs}
 	}
-	value, err := function.Call(i, arguments)
+	return fn.call(i, arguments)
+}
+
+func (i *Interpreter) groupingExpr(expr *ast.GroupingExpr) (any, error) {
+	return i.evaluate(expr.Expression)
+}
+
+func (i *Interpreter) logicalExpr(expr *ast.LogicalExpr) (any, error) {
+	left, err := i.evaluate(expr.Left)
 	if err != nil {
 		return nil, err
 	}
-	return value, nil
-}
-
-func (i *Interpreter) VisitExpressionStmt(stmt *ast.ExpressionStmt) error {
-	_, err := i.evaluate(stmt.Expression)
-	return err
-}
-
-func (i *Interpreter) VisitPrintStmt(stmt *ast.PrintStmt) error {
-	v, err := i.evaluate(stmt.Expression)
-	if err != nil {
-		return err
+	if expr.Operator.Kind == ast.Or {
+		if isTruthy(left) {
+			return left, nil
+		}
+	} else {
+		if !isTruthy(left) {
+			return left, nil
+		}
 	}
-	fmt.Println(i.stringify(v))
-	return nil
+	return i.evaluate(expr.Right)
 }
 
-func (i *Interpreter) VisitBlockStmt(stmt *ast.BlockStmt) error {
+func (i *Interpreter) literalExpr(expr *ast.LiteralExpr) (any, error) {
+	return expr.Value, nil
+}
+
+func (i *Interpreter) unaryExpr(expr *ast.UnaryExpr) (any, error) {
+	right, err := i.evaluate(expr.Right)
+	if err != nil {
+		return nil, err
+	}
+	switch expr.Operator.Kind {
+	case ast.Minus:
+		if err := checkNumberOperand(expr.Operator, right); err != nil {
+			return nil, err
+		}
+		return -right.(float64), nil
+	case ast.Bang:
+		return !isTruthy(right), nil
+	}
+	panic("interpreter: cannot match operator for unary expression")
+}
+
+func (i *Interpreter) varExpr(expr *ast.VarExpr) (any, error) {
+	return i.env.get(expr.Name)
+}
+
+func (i *Interpreter) blockStmt(stmt *ast.BlockStmt) (any, error) {
 	return i.executeBlock(stmt.Statements, newEnv(i.env))
 }
 
-func (i *Interpreter) VisitVarStmt(stmt *ast.VarStmt) error {
+func (i *Interpreter) expressionStmt(stmt *ast.ExpressionStmt) (any, error) {
+	_, err := i.evaluate(stmt.Expression)
+	return nil, err
+}
+
+func (i *Interpreter) functionStmt(stmt *ast.FunctionStmt) (any, error) {
+	i.env.define(stmt.Name.Lexeme, &function{stmt, i.env})
+	return nil, nil
+}
+
+func (i *Interpreter) ifStmt(stmt *ast.IfStmt) (any, error) {
+	value, err := i.evaluate(stmt.Condition)
+	if err != nil {
+		return nil, err
+	}
+	if isTruthy(value) {
+		return i.execute(stmt.ThenBranch)
+	} else if stmt.ElseBranch != nil {
+		return i.execute(stmt.ElseBranch)
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) printStmt(stmt *ast.PrintStmt) (any, error) {
+	value, err := i.evaluate(stmt.Expression)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(stringify(value))
+	return nil, nil
+}
+
+func (i *Interpreter) returnStmt(stmt *ast.ReturnStmt) (any, error) {
+	if stmt.Value != nil {
+		return i.evaluate(stmt.Value)
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) whileStmt(stmt *ast.WhileStmt) (any, error) {
+	for {
+		value, err := i.evaluate(stmt.Condition)
+		if err != nil {
+			return nil, err
+		}
+		if !isTruthy(value) {
+			break
+		}
+		value, err = i.execute(stmt.Body)
+		if err != nil {
+			return nil, err
+		}
+		if value != nil {
+			return value, nil
+		}
+	}
+	return nil, nil
+}
+
+func (i *Interpreter) varStmt(stmt *ast.VarStmt) (any, error) {
 	var value any
 	if stmt.Initializer != nil {
 		var err error
 		value, err = i.evaluate(stmt.Initializer)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	i.env.define(stmt.Name.Lexeme, value)
-	return nil
-}
-
-func (i *Interpreter) VisitIfStmt(stmt *ast.IfStmt) error {
-	value, err := i.evaluate(stmt.Condition)
-	if err != nil {
-		return err
-	}
-	if i.isTruthy(value) {
-		if err = i.execute(stmt.ThenBranch); err != nil {
-			return err
-		}
-	} else if stmt.ElseBranch != nil {
-		if err = i.execute(stmt.ElseBranch); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (i *Interpreter) VisitWhileStmt(stmt *ast.WhileStmt) error {
-	for {
-		value, err := i.evaluate(stmt.Condition)
-		if err != nil {
-			return err
-		}
-		if !i.isTruthy(value) {
-			break
-		}
-		if err = i.execute(stmt.Body); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (i *Interpreter) VisitFunctionStmt(stmt *ast.FunctionStmt) error {
-	function := &Function{Declaration: stmt, Closure: i.env}
-	i.env.define(stmt.Name.Lexeme, function)
-	return nil
-}
-
-type returnError struct {
-	value any
-}
-
-func (e *returnError) Error() string {
-	return fmt.Sprint(e.value)
-}
-
-func (i *Interpreter) VisitReturnStmt(stmt *ast.ReturnStmt) error {
-	var value any
-	var err error
-	if stmt.Value != nil {
-		value, err = i.evaluate(stmt.Value)
-		if err != nil {
-			return err
-		}
-	}
-	return &returnError{value}
+	return nil, nil
 }
