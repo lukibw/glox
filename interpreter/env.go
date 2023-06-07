@@ -15,6 +15,14 @@ func (e *env) define(name string, value any) {
 	e.values[name] = value
 }
 
+func (e *env) ancestor(distance int) *env {
+	t := e
+	for i := 0; i < distance; i++ {
+		t = t.enclosing
+	}
+	return t
+}
+
 func (e *env) get(name ast.Token) (any, error) {
 	v, ok := e.values[name.Lexeme]
 	if !ok {
@@ -26,6 +34,10 @@ func (e *env) get(name ast.Token) (any, error) {
 	return v, nil
 }
 
+func (e *env) getAt(distance int, name ast.Token) (any, error) {
+	return e.ancestor(distance).get(name)
+}
+
 func (e *env) assign(name ast.Token, value any) error {
 	if _, ok := e.values[name.Lexeme]; !ok {
 		if e.enclosing != nil {
@@ -35,4 +47,8 @@ func (e *env) assign(name ast.Token, value any) error {
 	}
 	e.values[name.Lexeme] = value
 	return nil
+}
+
+func (e *env) assignAt(distance int, name ast.Token, value any) error {
+	return e.ancestor(distance).assign(name, value)
 }

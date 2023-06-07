@@ -7,6 +7,7 @@ import (
 
 	"github.com/lukibw/glox/interpreter"
 	"github.com/lukibw/glox/parser"
+	"github.com/lukibw/glox/resolver"
 	"github.com/lukibw/glox/scanner"
 )
 
@@ -28,7 +29,12 @@ func main() {
 		}
 		os.Exit(1)
 	}
-	interpreter := interpreter.New()
+	resolver := resolver.New()
+	locals, err := resolver.Run(statements)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	interpreter := interpreter.New(locals)
 	if err = interpreter.Run(statements); err != nil {
 		log.Fatalln(err)
 	}

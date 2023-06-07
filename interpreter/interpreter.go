@@ -10,12 +10,13 @@ import (
 type Interpreter struct {
 	globals *env
 	env     *env
+	locals  map[ast.Expr]int
 }
 
-func New() *Interpreter {
+func New(locals map[ast.Expr]int) *Interpreter {
 	globals := newEnv(nil)
 	globals.define("clock", clock{})
-	return &Interpreter{globals, globals}
+	return &Interpreter{globals, globals, locals}
 }
 
 func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
@@ -82,6 +83,14 @@ func (i *Interpreter) executeBlock(stmts []ast.Stmt, env *env) (any, error) {
 	return nil, nil
 }
 
+func (i *Interpreter) lookUpVariable(name ast.Token, expr ast.Expr) (any, error) {
+	distance, ok := i.locals[expr]
+	if !ok {
+		return i.globals.get(name)
+	}
+	return i.env.getAt(distance, name)
+}
+
 func (i *Interpreter) Run(stmts []ast.Stmt) error {
 	var err error
 	for _, stmt := range stmts {
@@ -97,7 +106,12 @@ func (i *Interpreter) assignExpr(expr *ast.AssignExpr) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	i.env.assign(expr.Name, value)
+	distance, ok := i.locals[expr]
+	if !ok {
+		i.globals.assign(expr.Name, value)
+	} else {
+		i.env.assignAt(distance, expr.Name, value)
+	}
 	return value, nil
 }
 
@@ -237,7 +251,7 @@ func (i *Interpreter) unaryExpr(expr *ast.UnaryExpr) (any, error) {
 }
 
 func (i *Interpreter) varExpr(expr *ast.VarExpr) (any, error) {
-	return i.env.get(expr.Name)
+	return i.lookUpVariable(expr.Name, expr)
 }
 
 func (i *Interpreter) blockStmt(stmt *ast.BlockStmt) (any, error) {
