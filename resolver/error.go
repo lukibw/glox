@@ -14,6 +14,9 @@ const (
 	ErrTopLevelReturn
 	ErrInitializerReturn
 	ErrThisOutsideClass
+	ErrSelfInheritClass
+	ErrSuperOutsideClass
+	ErrSuperNoSuperclass
 )
 
 var errorMessages = map[ErrorKind]string{
@@ -22,6 +25,9 @@ var errorMessages = map[ErrorKind]string{
 	ErrTopLevelReturn:    "cannot return from top-level code",
 	ErrInitializerReturn: "cannot return a value from an initializer",
 	ErrThisOutsideClass:  "cannot use 'this' outside of a class",
+	ErrSelfInheritClass:  "a class cannot inherit from itself",
+	ErrSuperOutsideClass: "cannot use 'super' outside of a class",
+	ErrSuperNoSuperclass: "cannot use 'super' in a class with no superclass",
 }
 
 func (k ErrorKind) String() string {

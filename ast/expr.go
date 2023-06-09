@@ -62,6 +62,13 @@ type SetExpr struct {
 
 func (e *SetExpr) expr() {}
 
+type SuperExpr struct {
+	Keyword Token
+	Method  Token
+}
+
+func (e *SuperExpr) expr() {}
+
 type ThisExpr struct {
 	Keyword Token
 }

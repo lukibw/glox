@@ -119,6 +119,13 @@ func (p *Parser) classDeclaration() (*ast.ClassStmt, error) {
 	if err != nil {
 		return nil, err
 	}
+	var superclass *ast.VarExpr
+	if p.match(ast.Less) {
+		if _, err = p.consume(ast.Identifier, ErrSuperclassName); err != nil {
+			return nil, err
+		}
+		superclass = &ast.VarExpr{Name: p.previous()}
+	}
 	if _, err = p.consume(ast.LeftBrace, ErrClassLeftBrace); err != nil {
 		return nil, err
 	}
@@ -133,7 +140,11 @@ func (p *Parser) classDeclaration() (*ast.ClassStmt, error) {
 	if _, err = p.consume(ast.RightBrace, ErrClassRightBrace); err != nil {
 		return nil, err
 	}
-	return &ast.ClassStmt{Name: name, Methods: methods}, nil
+	return &ast.ClassStmt{
+		Name:       name,
+		Superclass: superclass,
+		Methods:    methods,
+	}, nil
 }
 
 func (p *Parser) function() (*ast.FunctionStmt, error) {
@@ -603,6 +614,17 @@ func (p *Parser) primary() (ast.Expr, error) {
 		return &ast.LiteralExpr{Value: nil}, nil
 	case p.match(ast.Number, ast.String):
 		return &ast.LiteralExpr{Value: p.previous().Literal}, nil
+	case p.match(ast.Super):
+		keyword := p.previous()
+		_, err := p.consume(ast.Dot, ErrSuperclassDot)
+		if err != nil {
+			return nil, err
+		}
+		method, err := p.consume(ast.Identifier, ErrSuperclassMethod)
+		if err != nil {
+			return nil, err
+		}
+		return &ast.SuperExpr{Keyword: keyword, Method: method}, nil
 	case p.match(ast.This):
 		return &ast.ThisExpr{Keyword: p.previous()}, nil
 	case p.match(ast.Identifier):

@@ -18,6 +18,7 @@ const (
 	ErrFunctionTooManyArgs
 	ErrInstanceProperty
 	ErrUndefinedProperty
+	ErrSuperclassNotAClass
 )
 
 var runtimeErrorMessages = map[ErrorKind]string{
@@ -30,6 +31,7 @@ var runtimeErrorMessages = map[ErrorKind]string{
 	ErrFunctionTooManyArgs:     "too many arguments passed to the function",
 	ErrInstanceProperty:        "only instances have properties",
 	ErrUndefinedProperty:       "undefined property",
+	ErrSuperclassNotAClass:     "superclass must be a class",
 }
 
 func (k ErrorKind) String() string {

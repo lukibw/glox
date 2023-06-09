@@ -11,8 +11,9 @@ type BlockStmt struct {
 func (s *BlockStmt) stmt() {}
 
 type ClassStmt struct {
-	Name    Token
-	Methods []*FunctionStmt
+	Name       Token
+	Superclass *VarExpr
+	Methods    []*FunctionStmt
 }
 
 func (s *ClassStmt) stmt() {}

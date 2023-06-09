@@ -29,6 +29,10 @@ func (e *env) getStr(name string) any {
 	return e.values[name]
 }
 
+func (e *env) getStrAt(distance int, name string) any {
+	return e.ancestor(distance).getStr(name)
+}
+
 func (e *env) get(name ast.Token) (any, error) {
 	v, ok := e.values[name.Lexeme]
 	if !ok {

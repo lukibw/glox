@@ -20,6 +20,7 @@ type classKind int
 const (
 	noClass classKind = iota
 	normalClass
+	subClass
 )
 
 type Resolver struct {
@@ -77,6 +78,8 @@ func (r *Resolver) resolveExpr(expr ast.Expr) error {
 		return r.logicalExpr(e)
 	case *ast.SetExpr:
 		return r.setExpr(e)
+	case *ast.SuperExpr:
+		return r.superExpr(e)
 	case *ast.ThisExpr:
 		return r.thisExpr(e)
 	case *ast.UnaryExpr:
@@ -209,6 +212,16 @@ func (r *Resolver) setExpr(expr *ast.SetExpr) error {
 	return r.resolveExpr(expr.Object)
 }
 
+func (r *Resolver) superExpr(expr *ast.SuperExpr) error {
+	if r.currentClass == noClass {
+		return &Error{expr.Keyword, ErrSuperOutsideClass}
+	}
+	if r.currentClass != subClass {
+		return &Error{expr.Keyword, ErrSuperNoSuperclass}
+	}
+	return r.resolveLocal(expr, expr.Keyword)
+}
+
 func (r *Resolver) thisExpr(expr *ast.ThisExpr) error {
 	if r.currentClass == noClass {
 		return &Error{expr.Keyword, ErrThisOutsideClass}
@@ -236,18 +249,25 @@ func (r *Resolver) blockStmt(stmt *ast.BlockStmt) error {
 }
 
 func (r *Resolver) classStmt(stmt *ast.ClassStmt) error {
+	enclosingClass := r.currentClass
+	r.currentClass = normalClass
 	err := r.declare(stmt.Name)
 	if err != nil {
 		return err
 	}
 	r.define(stmt.Name)
-	enclosingClass := r.currentClass
-	r.currentClass = normalClass
+	if stmt.Superclass != nil {
+		r.currentClass = subClass
+		if stmt.Name.Lexeme == stmt.Superclass.Name.Lexeme {
+			return &Error{stmt.Superclass.Name, ErrSelfInheritClass}
+		}
+		if err = r.resolveExpr(stmt.Superclass); err != nil {
+			return err
+		}
+		r.beginScope()
+		r.scopes.peek()["super"] = true
+	}
 	r.beginScope()
-	defer func() {
-		r.endScope()
-		r.currentClass = enclosingClass
-	}()
 	r.scopes.peek()["this"] = true
 	for _, method := range stmt.Methods {
 		kind := methodFunction
@@ -258,6 +278,11 @@ func (r *Resolver) classStmt(stmt *ast.ClassStmt) error {
 			return err
 		}
 	}
+	r.endScope()
+	if stmt.Superclass != nil {
+		r.endScope()
+	}
+	r.currentClass = enclosingClass
 	return nil
 }
 

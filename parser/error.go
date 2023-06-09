@@ -35,6 +35,9 @@ const (
 	ErrClassLeftBrace
 	ErrClassRightBrace
 	ErrClassProperty
+	ErrSuperclassName
+	ErrSuperclassDot
+	ErrSuperclassMethod
 )
 
 var errorMessages = map[ErrorKind]string{
@@ -64,6 +67,9 @@ var errorMessages = map[ErrorKind]string{
 	ErrClassLeftBrace:             "missing '{' before class body",
 	ErrClassRightBrace:            "missing '}' after class body",
 	ErrClassProperty:              "missing property name after '.'",
+	ErrSuperclassName:             "missing superclass name",
+	ErrSuperclassDot:              "missing '.' after 'super'",
+	ErrSuperclassMethod:           "missing superclass method name",
 }
 
 func (k ErrorKind) String() string {

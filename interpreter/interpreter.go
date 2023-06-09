@@ -37,6 +37,8 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 		return i.logicalExpr(e)
 	case *ast.SetExpr:
 		return i.setExpr(e)
+	case *ast.SuperExpr:
+		return i.superExpr(e)
 	case *ast.ThisExpr:
 		return i.thisExpr(e)
 	case *ast.UnaryExpr:
@@ -274,6 +276,17 @@ func (i *Interpreter) setExpr(expr *ast.SetExpr) (any, error) {
 	return value, nil
 }
 
+func (i *Interpreter) superExpr(expr *ast.SuperExpr) (any, error) {
+	distance := i.locals[expr]
+	super := i.env.getStrAt(distance, "super").(*class)
+	object := i.env.getStrAt(distance-1, "this").(*instance)
+	method := super.findMethod(expr.Method.Lexeme)
+	if method == nil {
+		return nil, &Error{expr.Method, ErrUndefinedProperty}
+	}
+	return method.bind(object), nil
+}
+
 func (i *Interpreter) thisExpr(expr *ast.ThisExpr) (any, error) {
 	return i.lookUpVariable(expr.Keyword, expr)
 }
@@ -304,13 +317,32 @@ func (i *Interpreter) blockStmt(stmt *ast.BlockStmt) (any, error) {
 }
 
 func (i *Interpreter) classStmt(stmt *ast.ClassStmt) (any, error) {
+	var super *class
+	if stmt.Superclass != nil {
+		superclass, err := i.evaluate(stmt.Superclass)
+		if err != nil {
+			return nil, err
+		}
+		var ok bool
+		super, ok = superclass.(*class)
+		if !ok {
+			return nil, &Error{stmt.Superclass.Name, ErrSuperclassNotAClass}
+		}
+	}
 	i.env.define(stmt.Name.Lexeme, nil)
+	if stmt.Superclass != nil {
+		i.env = newEnv(i.env)
+		i.env.define("super", super)
+	}
 	methods := make(map[string]*function)
 	for _, method := range stmt.Methods {
 		name := method.Name.Lexeme
 		methods[name] = &function{method, i.env, name == "init"}
 	}
-	return nil, i.env.assign(stmt.Name, &class{stmt.Name.Lexeme, methods})
+	if stmt.Superclass != nil {
+		i.env = i.env.enclosing
+	}
+	return nil, i.env.assign(stmt.Name, &class{stmt.Name.Lexeme, methods, super})
 }
 
 func (i *Interpreter) expressionStmt(stmt *ast.ExpressionStmt) (any, error) {
