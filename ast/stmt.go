@@ -10,6 +10,13 @@ type BlockStmt struct {
 
 func (s *BlockStmt) stmt() {}
 
+type ClassStmt struct {
+	Name    Token
+	Methods []*FunctionStmt
+}
+
+func (s *ClassStmt) stmt() {}
+
 type ExpressionStmt struct {
 	Expression Expr
 }

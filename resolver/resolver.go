@@ -11,16 +11,26 @@ type functionKind int
 const (
 	noFunction functionKind = iota
 	normalFunction
+	methodFunction
+	initializerFunction
+)
+
+type classKind int
+
+const (
+	noClass classKind = iota
+	normalClass
 )
 
 type Resolver struct {
-	scopes    *stack
-	locals    map[ast.Expr]int
-	currentFn functionKind
+	scopes       *stack
+	locals       map[ast.Expr]int
+	currentFn    functionKind
+	currentClass classKind
 }
 
 func New() *Resolver {
-	return &Resolver{newStack(), make(map[ast.Expr]int), noFunction}
+	return &Resolver{newStack(), make(map[ast.Expr]int), noFunction, noClass}
 }
 
 func (r *Resolver) declare(name ast.Token) error {
@@ -57,12 +67,18 @@ func (r *Resolver) resolveExpr(expr ast.Expr) error {
 		return r.binaryExpr(e)
 	case *ast.CallExpr:
 		return r.callExpr(e)
+	case *ast.GetExpr:
+		return r.getExpr(e)
 	case *ast.GroupingExpr:
 		return r.groupingExpr(e)
-	case *ast.LogicalExpr:
-		return r.logicalExpr(e)
 	case *ast.LiteralExpr:
 		return r.literalExpr(e)
+	case *ast.LogicalExpr:
+		return r.logicalExpr(e)
+	case *ast.SetExpr:
+		return r.setExpr(e)
+	case *ast.ThisExpr:
+		return r.thisExpr(e)
 	case *ast.UnaryExpr:
 		return r.unaryExpr(e)
 	case *ast.VarExpr:
@@ -76,6 +92,8 @@ func (r *Resolver) resolveStmt(stmt ast.Stmt) error {
 	switch s := stmt.(type) {
 	case *ast.BlockStmt:
 		return r.blockStmt(s)
+	case *ast.ClassStmt:
+		return r.classStmt(s)
 	case *ast.ExpressionStmt:
 		return r.expressionStmt(s)
 	case *ast.FunctionStmt:
@@ -165,8 +183,16 @@ func (r *Resolver) callExpr(expr *ast.CallExpr) error {
 	return nil
 }
 
+func (r *Resolver) getExpr(expr *ast.GetExpr) error {
+	return r.resolveExpr(expr.Object)
+}
+
 func (r *Resolver) groupingExpr(expr *ast.GroupingExpr) error {
 	return r.resolveExpr(expr.Expression)
+}
+
+func (r *Resolver) literalExpr(expr *ast.LiteralExpr) error {
+	return nil
 }
 
 func (r *Resolver) logicalExpr(expr *ast.LogicalExpr) error {
@@ -176,8 +202,18 @@ func (r *Resolver) logicalExpr(expr *ast.LogicalExpr) error {
 	return r.resolveExpr(expr.Right)
 }
 
-func (r *Resolver) literalExpr(expr *ast.LiteralExpr) error {
-	return nil
+func (r *Resolver) setExpr(expr *ast.SetExpr) error {
+	if err := r.resolveExpr(expr.Value); err != nil {
+		return err
+	}
+	return r.resolveExpr(expr.Object)
+}
+
+func (r *Resolver) thisExpr(expr *ast.ThisExpr) error {
+	if r.currentClass == noClass {
+		return &Error{expr.Keyword, ErrThisOutsideClass}
+	}
+	return r.resolveLocal(expr, expr.Keyword)
 }
 
 func (r *Resolver) unaryExpr(expr *ast.UnaryExpr) error {
@@ -185,9 +221,10 @@ func (r *Resolver) unaryExpr(expr *ast.UnaryExpr) error {
 }
 
 func (r *Resolver) varExpr(expr *ast.VarExpr) error {
-	defined, ok := r.scopes.peek()[expr.Name.Lexeme]
-	if !r.scopes.isEmpty() && ok && !defined {
-		return &Error{expr.Name, ErrVarInitializer}
+	if !r.scopes.isEmpty() {
+		if defined, ok := r.scopes.peek()[expr.Name.Lexeme]; ok && !defined {
+			return &Error{expr.Name, ErrVarInitializer}
+		}
 	}
 	return r.resolveLocal(expr, expr.Name)
 }
@@ -196,6 +233,32 @@ func (r *Resolver) blockStmt(stmt *ast.BlockStmt) error {
 	r.beginScope()
 	defer r.endScope()
 	return r.resolveStmts(stmt.Statements)
+}
+
+func (r *Resolver) classStmt(stmt *ast.ClassStmt) error {
+	err := r.declare(stmt.Name)
+	if err != nil {
+		return err
+	}
+	r.define(stmt.Name)
+	enclosingClass := r.currentClass
+	r.currentClass = normalClass
+	r.beginScope()
+	defer func() {
+		r.endScope()
+		r.currentClass = enclosingClass
+	}()
+	r.scopes.peek()["this"] = true
+	for _, method := range stmt.Methods {
+		kind := methodFunction
+		if method.Name.Lexeme == "init" {
+			kind = initializerFunction
+		}
+		if err = r.resolveFunction(method, kind); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *Resolver) expressionStmt(stmt *ast.ExpressionStmt) error {
@@ -234,7 +297,13 @@ func (r *Resolver) returnStmt(stmt *ast.ReturnStmt) error {
 	if r.currentFn == noFunction {
 		return &Error{stmt.Keyword, ErrTopLevelReturn}
 	}
-	return r.resolveExpr(stmt.Value)
+	if stmt.Value != nil {
+		if r.currentFn == initializerFunction {
+			return &Error{stmt.Keyword, ErrInitializerReturn}
+		}
+		return r.resolveExpr(stmt.Value)
+	}
+	return nil
 }
 
 func (r *Resolver) whileStmt(stmt *ast.WhileStmt) error {

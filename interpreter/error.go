@@ -16,6 +16,8 @@ const (
 	ErrFunctionOrClassCallable
 	ErrFunctionTooFewArgs
 	ErrFunctionTooManyArgs
+	ErrInstanceProperty
+	ErrUndefinedProperty
 )
 
 var runtimeErrorMessages = map[ErrorKind]string{
@@ -26,6 +28,8 @@ var runtimeErrorMessages = map[ErrorKind]string{
 	ErrFunctionOrClassCallable: "callable must be a function or a class",
 	ErrFunctionTooFewArgs:      "too few arguments passed to the function",
 	ErrFunctionTooManyArgs:     "too many arguments passed to the function",
+	ErrInstanceProperty:        "only instances have properties",
+	ErrUndefinedProperty:       "undefined property",
 }
 
 func (k ErrorKind) String() string {

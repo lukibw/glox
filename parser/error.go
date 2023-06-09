@@ -31,6 +31,10 @@ const (
 	ErrParameterName
 	ErrFunctionLeftBrace
 	ErrReturnSemicolon
+	ErrClassName
+	ErrClassLeftBrace
+	ErrClassRightBrace
+	ErrClassProperty
 )
 
 var errorMessages = map[ErrorKind]string{
@@ -56,6 +60,10 @@ var errorMessages = map[ErrorKind]string{
 	ErrParameterName:              "missing parameter name",
 	ErrFunctionLeftBrace:          "missing '{' before function body",
 	ErrReturnSemicolon:            "missing ';' after return value",
+	ErrClassName:                  "missing class name",
+	ErrClassLeftBrace:             "missing '{' before class body",
+	ErrClassRightBrace:            "missing '}' after class body",
+	ErrClassProperty:              "missing property name after '.'",
 }
 
 func (k ErrorKind) String() string {

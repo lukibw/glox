@@ -27,12 +27,18 @@ func (i *Interpreter) evaluate(expr ast.Expr) (any, error) {
 		return i.binaryExpr(e)
 	case *ast.CallExpr:
 		return i.callExpr(e)
+	case *ast.GetExpr:
+		return i.getExpr(e)
 	case *ast.GroupingExpr:
 		return i.groupingExpr(e)
-	case *ast.LogicalExpr:
-		return i.logicalExpr(e)
 	case *ast.LiteralExpr:
 		return i.literalExpr(e)
+	case *ast.LogicalExpr:
+		return i.logicalExpr(e)
+	case *ast.SetExpr:
+		return i.setExpr(e)
+	case *ast.ThisExpr:
+		return i.thisExpr(e)
 	case *ast.UnaryExpr:
 		return i.unaryExpr(e)
 	case *ast.VarExpr:
@@ -46,6 +52,8 @@ func (i *Interpreter) execute(stmt ast.Stmt) (any, error) {
 	switch s := stmt.(type) {
 	case *ast.BlockStmt:
 		return i.blockStmt(s)
+	case *ast.ClassStmt:
+		return i.classStmt(s)
 	case *ast.ExpressionStmt:
 		return i.expressionStmt(s)
 	case *ast.FunctionStmt:
@@ -108,9 +116,13 @@ func (i *Interpreter) assignExpr(expr *ast.AssignExpr) (any, error) {
 	}
 	distance, ok := i.locals[expr]
 	if !ok {
-		i.globals.assign(expr.Name, value)
+		if err = i.globals.assign(expr.Name, value); err != nil {
+			return nil, err
+		}
 	} else {
-		i.env.assignAt(distance, expr.Name, value)
+		if err = i.env.assignAt(distance, expr.Name, value); err != nil {
+			return nil, err
+		}
 	}
 	return value, nil
 }
@@ -208,8 +220,24 @@ func (i *Interpreter) callExpr(expr *ast.CallExpr) (any, error) {
 	return fn.call(i, arguments)
 }
 
+func (i *Interpreter) getExpr(expr *ast.GetExpr) (any, error) {
+	object, err := i.evaluate(expr.Object)
+	if err != nil {
+		return nil, err
+	}
+	in, ok := object.(*instance)
+	if !ok {
+		return nil, &Error{expr.Name, ErrInstanceProperty}
+	}
+	return in.get(expr.Name)
+}
+
 func (i *Interpreter) groupingExpr(expr *ast.GroupingExpr) (any, error) {
 	return i.evaluate(expr.Expression)
+}
+
+func (i *Interpreter) literalExpr(expr *ast.LiteralExpr) (any, error) {
+	return expr.Value, nil
 }
 
 func (i *Interpreter) logicalExpr(expr *ast.LogicalExpr) (any, error) {
@@ -229,8 +257,25 @@ func (i *Interpreter) logicalExpr(expr *ast.LogicalExpr) (any, error) {
 	return i.evaluate(expr.Right)
 }
 
-func (i *Interpreter) literalExpr(expr *ast.LiteralExpr) (any, error) {
-	return expr.Value, nil
+func (i *Interpreter) setExpr(expr *ast.SetExpr) (any, error) {
+	object, err := i.evaluate(expr.Object)
+	if err != nil {
+		return nil, err
+	}
+	in, ok := object.(*instance)
+	if !ok {
+		return nil, &Error{expr.Name, ErrInstanceProperty}
+	}
+	value, err := i.evaluate(expr.Value)
+	if err != nil {
+		return nil, err
+	}
+	in.set(expr.Name, value)
+	return value, nil
+}
+
+func (i *Interpreter) thisExpr(expr *ast.ThisExpr) (any, error) {
+	return i.lookUpVariable(expr.Keyword, expr)
 }
 
 func (i *Interpreter) unaryExpr(expr *ast.UnaryExpr) (any, error) {
@@ -258,13 +303,23 @@ func (i *Interpreter) blockStmt(stmt *ast.BlockStmt) (any, error) {
 	return i.executeBlock(stmt.Statements, newEnv(i.env))
 }
 
+func (i *Interpreter) classStmt(stmt *ast.ClassStmt) (any, error) {
+	i.env.define(stmt.Name.Lexeme, nil)
+	methods := make(map[string]*function)
+	for _, method := range stmt.Methods {
+		name := method.Name.Lexeme
+		methods[name] = &function{method, i.env, name == "init"}
+	}
+	return nil, i.env.assign(stmt.Name, &class{stmt.Name.Lexeme, methods})
+}
+
 func (i *Interpreter) expressionStmt(stmt *ast.ExpressionStmt) (any, error) {
 	_, err := i.evaluate(stmt.Expression)
 	return nil, err
 }
 
 func (i *Interpreter) functionStmt(stmt *ast.FunctionStmt) (any, error) {
-	i.env.define(stmt.Name.Lexeme, &function{stmt, i.env})
+	i.env.define(stmt.Name.Lexeme, &function{stmt, i.env, false})
 	return nil, nil
 }
 

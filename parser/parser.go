@@ -103,10 +103,75 @@ func (p *Parser) synchronize() {
 }
 
 func (p *Parser) declaration() (ast.Stmt, error) {
-	if p.match(ast.Var) {
+	switch {
+	case p.match(ast.Class):
+		return p.classDeclaration()
+	case p.match(ast.Fun):
+		return p.function()
+	case p.match(ast.Var):
 		return p.varDeclaration()
 	}
 	return p.statement()
+}
+
+func (p *Parser) classDeclaration() (*ast.ClassStmt, error) {
+	name, err := p.consume(ast.Identifier, ErrClassName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = p.consume(ast.LeftBrace, ErrClassLeftBrace); err != nil {
+		return nil, err
+	}
+	methods := make([]*ast.FunctionStmt, 0)
+	for !p.check(ast.RightBrace) && !p.isAtEnd() {
+		method, err := p.function()
+		if err != nil {
+			return nil, err
+		}
+		methods = append(methods, method)
+	}
+	if _, err = p.consume(ast.RightBrace, ErrClassRightBrace); err != nil {
+		return nil, err
+	}
+	return &ast.ClassStmt{Name: name, Methods: methods}, nil
+}
+
+func (p *Parser) function() (*ast.FunctionStmt, error) {
+	name, err := p.consume(ast.Identifier, ErrFunctionName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.consume(ast.LeftParen, ErrFunctionLeftParen); err != nil {
+		return nil, err
+	}
+	params := make([]ast.Token, 0)
+	if !p.check(ast.RightParen) {
+		for {
+			param, err := p.consume(ast.Identifier, ErrParameterName)
+			if err != nil {
+				return nil, err
+			}
+			params = append(params, param)
+			if !p.match(ast.Comma) {
+				break
+			}
+		}
+	}
+	if _, err = p.consume(ast.RightParen, ErrFunctionRightParen); err != nil {
+		return nil, err
+	}
+	if _, err = p.consume(ast.LeftBrace, ErrFunctionLeftBrace); err != nil {
+		return nil, err
+	}
+	body, err := p.block()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.FunctionStmt{
+		Name:   name,
+		Params: params,
+		Body:   body,
+	}, nil
 }
 
 func (p *Parser) varDeclaration() (ast.Stmt, error) {
@@ -151,44 +216,6 @@ func (p *Parser) statement() (ast.Stmt, error) {
 	default:
 		return p.expressionStatement()
 	}
-}
-
-func (p *Parser) function() (ast.Stmt, error) {
-	name, err := p.consume(ast.Identifier, ErrFunctionName)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.consume(ast.LeftParen, ErrFunctionLeftParen); err != nil {
-		return nil, err
-	}
-	params := make([]ast.Token, 0)
-	if !p.check(ast.RightParen) {
-		for {
-			param, err := p.consume(ast.Identifier, ErrParameterName)
-			if err != nil {
-				return nil, err
-			}
-			params = append(params, param)
-			if !p.match(ast.Comma) {
-				break
-			}
-		}
-	}
-	if _, err = p.consume(ast.RightParen, ErrFunctionRightParen); err != nil {
-		return nil, err
-	}
-	if _, err = p.consume(ast.LeftBrace, ErrFunctionLeftBrace); err != nil {
-		return nil, err
-	}
-	body, err := p.block()
-	if err != nil {
-		return nil, err
-	}
-	return &ast.FunctionStmt{
-		Name:   name,
-		Params: params,
-		Body:   body,
-	}, nil
 }
 
 func (p *Parser) forStatement() (ast.Stmt, error) {
@@ -367,8 +394,15 @@ func (p *Parser) assignment() (ast.Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		if v, ok := expr.(*ast.VarExpr); ok {
-			return &ast.AssignExpr{Name: v.Name, Value: value}, nil
+		if e, ok := expr.(*ast.VarExpr); ok {
+			return &ast.AssignExpr{Name: e.Name, Value: value}, nil
+		}
+		if e, ok := expr.(*ast.GetExpr); ok {
+			return &ast.SetExpr{
+				Object: e.Object,
+				Name:   e.Name,
+				Value:  value,
+			}, nil
 		}
 		return nil, &Error{equals, ErrInvalidAssignTarget}
 	}
@@ -521,6 +555,12 @@ func (p *Parser) call() (ast.Expr, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else if p.match(ast.Dot) {
+			name, err := p.consume(ast.Identifier, ErrClassProperty)
+			if err != nil {
+				return nil, err
+			}
+			expr = &ast.GetExpr{Object: expr, Name: name}
 		} else {
 			break
 		}
@@ -563,6 +603,8 @@ func (p *Parser) primary() (ast.Expr, error) {
 		return &ast.LiteralExpr{Value: nil}, nil
 	case p.match(ast.Number, ast.String):
 		return &ast.LiteralExpr{Value: p.previous().Literal}, nil
+	case p.match(ast.This):
+		return &ast.ThisExpr{Keyword: p.previous()}, nil
 	case p.match(ast.Identifier):
 		return &ast.VarExpr{Name: p.previous()}, nil
 	case p.match(ast.LeftParen):

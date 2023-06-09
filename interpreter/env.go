@@ -1,6 +1,8 @@
 package interpreter
 
-import "github.com/lukibw/glox/ast"
+import (
+	"github.com/lukibw/glox/ast"
+)
 
 type env struct {
 	values    map[string]any
@@ -21,6 +23,10 @@ func (e *env) ancestor(distance int) *env {
 		t = t.enclosing
 	}
 	return t
+}
+
+func (e *env) getStr(name string) any {
+	return e.values[name]
 }
 
 func (e *env) get(name ast.Token) (any, error) {

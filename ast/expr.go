@@ -27,6 +27,13 @@ type CallExpr struct {
 
 func (e *CallExpr) expr() {}
 
+type GetExpr struct {
+	Object Expr
+	Name   Token
+}
+
+func (e *GetExpr) expr() {}
+
 type GroupingExpr struct {
 	Expression Expr
 }
@@ -46,6 +53,20 @@ type LogicalExpr struct {
 }
 
 func (e *LogicalExpr) expr() {}
+
+type SetExpr struct {
+	Object Expr
+	Name   Token
+	Value  Expr
+}
+
+func (e *SetExpr) expr() {}
+
+type ThisExpr struct {
+	Keyword Token
+}
+
+func (e *ThisExpr) expr() {}
 
 type UnaryExpr struct {
 	Operator Token
